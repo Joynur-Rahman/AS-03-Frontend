@@ -19,9 +19,7 @@ function Dashboard() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
 
-  /* ─────────────────────────────────────────────
-     FETCH USER
-  ───────────────────────────────────────────── */
+  /* FETCH USER */
   useEffect(() => {
     getCurrentUser().then((data) => {
       const actualUser = data?.data ? data.data : data;
@@ -29,9 +27,7 @@ function Dashboard() {
     });
   }, []);
 
-  /* ─────────────────────────────────────────────
-     SESSION TIMER
-  ───────────────────────────────────────────── */
+  /* SESSION TIMER */
   useEffect(() => {
     if (!user?.exp) return;
 
@@ -45,15 +41,10 @@ function Dashboard() {
 
   if (!user) return <div className="center">Loading...</div>;
 
-  /* ─────────────────────────────────────────────
-     ROLE DETECTION (Keycloak Safe)
-  ───────────────────────────────────────────── */
   const role =
     user?.roles?.[0]?.toLowerCase() ||
     user?.realm_access?.roles?.[0]?.toLowerCase() ||
     "employee";
-
-  console.log("Logged Role:", role);
 
   const roleTheme = {
     employee: "#4e73df",
@@ -63,9 +54,6 @@ function Dashboard() {
 
   const themeColor = roleTheme[role] || "#4e73df";
 
-  /* ─────────────────────────────────────────────
-     CHART DATA
-  ───────────────────────────────────────────── */
   const chartData = [
     { month: "Jan", reality: 4200, target: 5200 },
     { month: "Feb", reality: 3800, target: 4700 },
@@ -114,9 +102,12 @@ function Dashboard() {
           </h1>
 
           <div className="profile">
+            {/* ✅ UPDATED PROFILE BUTTON */}
             <div
               className="profile-info"
               onClick={() => setShowDropdown(!showDropdown)}
+              role="button"
+              data-testid="profile-button"
             >
               <span>{user.name}</span>
               <img
@@ -133,9 +124,11 @@ function Dashboard() {
                 <div>🔔 Notifications</div>
                 <div>❓ Help & Support</div>
                 <hr />
-                <div className="logout" onClick={logout}>
+
+                {/* ✅ UPDATED LOGOUT BUTTON */}
+                <button className="logout" onClick={logout}>
                   🚪 Logout
-                </div>
+                </button>
               </div>
             )}
           </div>
@@ -166,7 +159,6 @@ function Dashboard() {
 
         {/* Info Cards */}
         <div className="card-row">
-          {/* Personal Info */}
           <div className="glass-card">
             <h3>Personal Info</h3>
             <p><b>Name:</b> {user.name}</p>
@@ -174,7 +166,6 @@ function Dashboard() {
             <p><b>Employee ID:</b> {user.employeeId}</p>
           </div>
 
-          {/* Access */}
           <div className="glass-card">
             <h3>Access</h3>
 
@@ -203,7 +194,6 @@ function Dashboard() {
             )}
           </div>
 
-          {/* Status */}
           <div className="glass-card">
             <h3>Status</h3>
             <p>🟢 Active</p>
