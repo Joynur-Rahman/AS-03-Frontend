@@ -1,10 +1,9 @@
 /* eslint-disable no-undef */
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import Dashboard from "./dashboard";
-import * as authApi from "../api/auth";
+import Dashboard from "./dashboard.jsx";
 
-// Mock recharts
+/* -------------------- MOCK RECHARTS -------------------- */
 jest.mock("recharts", () => ({
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
   BarChart: ({ children }) => <div>{children}</div>,
@@ -14,6 +13,17 @@ jest.mock("recharts", () => ({
   Tooltip: () => <div>Tooltip</div>,
   Legend: () => <div>Legend</div>,
 }));
+
+/* -------------------- MOCK IMAGE -------------------- */
+jest.mock("../assets/hdfcbanklogo.png", () => "logo");
+
+/* -------------------- MOCK AUTH MODULE -------------------- */
+jest.mock("../api/auth", () => ({
+  getCurrentUser: jest.fn(),
+  logout: jest.fn(),
+}));
+
+import { getCurrentUser, logout } from "../api/auth";
 
 describe("Dashboard Component", () => {
   const mockUser = {
@@ -25,8 +35,7 @@ describe("Dashboard Component", () => {
   };
 
   beforeEach(() => {
-    jest.spyOn(authApi, "getCurrentUser").mockResolvedValue(mockUser);
-    jest.spyOn(authApi, "logout").mockImplementation(() => {});
+    getCurrentUser.mockResolvedValue(mockUser);
   });
 
   afterEach(() => {
@@ -40,18 +49,28 @@ describe("Dashboard Component", () => {
 
   test("renders user name after API call", async () => {
     render(<Dashboard />);
-    await screen.findByText(/Good Morning, Nabajyoti Das/i);
+    expect(
+      await screen.findByText(/Good Morning, Nabajyoti Das/i)
+    ).toBeInTheDocument();
   });
 
   test("displays correct role in title", async () => {
     render(<Dashboard />);
-    await screen.findByText(/EMPLOYEE Dashboard/i);
+    expect(
+      await screen.findByText(/EMPLOYEE Dashboard/i)
+    ).toBeInTheDocument();
   });
 
   test("renders personal information", async () => {
     render(<Dashboard />);
-    expect(await screen.findByText(/nabajyoti@gmail.com/i)).toBeInTheDocument();
-    expect(await screen.findByText(/EMP-1023/i)).toBeInTheDocument();
+
+    expect(
+      await screen.findByText(/nabajyoti@gmail.com/i)
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByText(/EMP-1023/i)
+    ).toBeInTheDocument();
   });
 
   test("menu click activates item", async () => {
@@ -65,25 +84,30 @@ describe("Dashboard Component", () => {
   test("dropdown opens on profile click", async () => {
     render(<Dashboard />);
 
-    await screen.findByTestId("profile-button");
-    fireEvent.click(screen.getByTestId("profile-button"));
+    const profileButton = await screen.findByTestId("profile-button");
+    fireEvent.click(profileButton);
 
-    expect(screen.getByText(/View Profile/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/View Profile/i)
+    ).toBeInTheDocument();
   });
 
   test("logout function is called", async () => {
     render(<Dashboard />);
 
-    await screen.findByTestId("profile-button");
+    const profileButton = await screen.findByTestId("profile-button");
+    fireEvent.click(profileButton);
 
-    fireEvent.click(screen.getByTestId("profile-button"));
-    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
+    const logoutBtn = screen.getByRole("button", { name: /logout/i });
+    fireEvent.click(logoutBtn);
 
-    expect(authApi.logout).toHaveBeenCalled();
+    expect(logout).toHaveBeenCalled();
   });
 
   test("renders chart section", async () => {
     render(<Dashboard />);
-    await screen.findByText(/Target vs Reality/i);
+    expect(
+      await screen.findByText(/Target vs Reality/i)
+    ).toBeInTheDocument();
   });
 });
