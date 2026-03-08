@@ -95,108 +95,41 @@ function useCountUp(target, duration = 1200) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TOAST SYSTEM
+// TOAST SYSTEM  (welcome · session warning · refresh)
 // ═══════════════════════════════════════════════════════════════════════════════
+function useToast() {
+  const [toasts, setToasts] = React.useState([]);
+  const add = React.useCallback((message, type = "info", duration = 4000) => {
+    const id = Date.now() + Math.random();
+    setToasts((p) => [...p, { id, message, type }]);
+    if (duration > 0) setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), duration);
+    return id;
+  }, []);
+  const remove = React.useCallback((id) => setToasts((p) => p.filter((t) => t.id !== id)), []);
+  return { toasts, add, remove };
+}
+
 function ToastContainer({ toasts, onRemove }) {
+  if (!toasts.length) return null;
   return (
-    <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999,
+    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
       display: "flex", flexDirection: "column", gap: 10, pointerEvents: "none" }}>
       {toasts.map((t) => (
-        <div key={t.id} className="toast" style={{
+        <div key={t.id} style={{
           background: t.type === "error" ? "#fef2f2" : t.type === "warning" ? "#fffbeb" : t.type === "success" ? "#f0fdf4" : "#f8fafc",
           borderLeft: `4px solid ${t.type === "error" ? "#ef4444" : t.type === "warning" ? "#f59e0b" : t.type === "success" ? "#10b981" : "#6366f1"}`,
           color: "#1e293b", padding: "12px 16px", borderRadius: 12,
           boxShadow: "0 8px 24px rgba(0,0,0,0.14)", fontSize: 14, fontWeight: 500,
           minWidth: 280, display: "flex", alignItems: "center", gap: 10,
           pointerEvents: "all", animation: "slideInRight 0.3s ease" }}>
-          <span style={{ fontSize: 18 }}>{t.type === "error" ? "🚨" : t.type === "warning" ? "⚠️" : t.type === "success" ? "✅" : "ℹ️"}</span>
+          <span style={{ fontSize: 18 }}>
+            {t.type === "error" ? "🚨" : t.type === "warning" ? "⚠️" : t.type === "success" ? "✅" : "ℹ️"}
+          </span>
           <span style={{ flex: 1 }}>{t.message}</span>
           <button onClick={() => onRemove(t.id)} style={{ background: "none", border: "none",
             cursor: "pointer", fontSize: 18, color: "#94a3b8", padding: 0, lineHeight: 1 }}>×</button>
         </div>
       ))}
-    </div>
-  );
-}
-
-function useToast() {
-  const [toasts, setToasts] = useState([]);
-  const add = useCallback((message, type = "info", duration = 4000) => {
-    const id = Date.now() + Math.random();
-    setToasts((p) => [...p, { id, message, type }]);
-    if (duration > 0) setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), duration);
-    return id;
-  }, []);
-  const remove = useCallback((id) => setToasts((p) => p.filter((t) => t.id !== id)), []);
-  return { toasts, add, remove };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOTIFICATIONS PANEL
-// ═══════════════════════════════════════════════════════════════════════════════
-const SAMPLE_NOTIFICATIONS = [
-  { id: 1, icon: "💰", title: "Salary Credited",      body: "₹85,000 credited to your account",     time: "2 min ago",  unread: true,  color: "#10b981" },
-  { id: 2, icon: "🔐", title: "Login from new device",body: "Chrome · Mumbai · Mar 7 2026",          time: "15 min ago", unread: true,  color: "#f97316" },
-  { id: 3, icon: "📄", title: "Invoice #INV-0041 Paid",body: "Acme Corp paid $4,200",                 time: "1h ago",     unread: true,  color: "#6366f1" },
-  { id: 4, icon: "⚠️", title: "Failed login attempt", body: "3 failed attempts detected",            time: "3h ago",     unread: false, color: "#ef4444" },
-  { id: 5, icon: "🔄", title: "Session refreshed",    body: "Your session was auto-renewed",         time: "5h ago",     unread: false, color: "#2f8cf7" },
-  { id: 6, icon: "✅", title: "Profile updated",      body: "Your profile info was saved",           time: "Yesterday",  unread: false, color: "#10b981" },
-];
-
-function NotificationsPanel({ open, onClose, themeColor, dark }) {
-  const [notes, setNotes] = useState(SAMPLE_NOTIFICATIONS);
-  const unread = notes.filter((n) => n.unread).length;
-
-  if (!open) return null;
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 7000 }} onClick={onClose}>
-      <div style={{
-        position: "absolute", top: 68, right: 20, width: 360,
-        background: dark ? "#1e293b" : "#fff",
-        borderRadius: 18, boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
-        border: `1px solid ${dark ? "#334155" : "#e5e7eb"}`,
-        overflow: "hidden", animation: "fadeDown 0.2s ease",
-      }} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "16px 20px", borderBottom: `1px solid ${dark ? "#334155" : "#f1f5f9"}` }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: dark ? "#f1f5f9" : "#1e293b" }}>
-            Notifications {unread > 0 && <span style={{ background: "#ef4444", color: "#fff",
-              borderRadius: 99, fontSize: 11, padding: "1px 7px", marginLeft: 6 }}>{unread}</span>}
-          </div>
-          <button onClick={() => setNotes((p) => p.map((n) => ({ ...n, unread: false })))}
-            style={{ fontSize: 12, color: themeColor, background: "none", border: "none",
-              cursor: "pointer", fontWeight: 600 }}>Mark all read</button>
-        </div>
-        {/* List */}
-        <div style={{ maxHeight: 380, overflowY: "auto" }}>
-          {notes.map((n) => (
-            <div key={n.id} onClick={() => setNotes((p) => p.map((x) => x.id === n.id ? { ...x, unread: false } : x))}
-              style={{ display: "flex", gap: 12, padding: "13px 20px", cursor: "pointer",
-                background: n.unread ? (dark ? "#1e3a4a" : `${n.color}08`) : "transparent",
-                borderBottom: `1px solid ${dark ? "#334155" : "#f8fafc"}`,
-                transition: "background 0.15s" }}
-              onMouseEnter={(e) => e.currentTarget.style.background = dark ? "#263348" : "#f8fafc"}
-              onMouseLeave={(e) => e.currentTarget.style.background = n.unread ? (dark ? "#1e3a4a" : `${n.color}08`) : "transparent"}>
-              <div style={{ width: 38, height: 38, borderRadius: 12, background: `${n.color}18`,
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{n.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: dark ? "#f1f5f9" : "#1e293b" }}>{n.title}</span>
-                  {n.unread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: themeColor, flexShrink: 0 }} />}
-                </div>
-                <div style={{ fontSize: 12, color: dark ? "#94a3b8" : "#64748b", marginTop: 2 }}>{n.body}</div>
-                <div style={{ fontSize: 11, color: dark ? "#64748b" : "#94a3b8", marginTop: 3 }}>{n.time}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: "12px 20px", textAlign: "center",
-          borderTop: `1px solid ${dark ? "#334155" : "#f1f5f9"}` }}>
-          <button style={{ fontSize: 13, color: themeColor, background: "none", border: "none",
-            cursor: "pointer", fontWeight: 600 }}>View all notifications →</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -485,6 +418,758 @@ function ComingSoon({ item, themeColor }) {
       </div>
       <div style={{ background: themeColor, color: "#fff", borderRadius: 99,
         padding: "8px 22px", fontSize: 13, fontWeight: 600 }}>Coming Soon</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT PAGE  (Admin → User Management menu item)
+// ═══════════════════════════════════════════════════════════════════════════════
+const INITIAL_USERS = [
+  { id: 1,  name: "Alice Chen",   email: "alice@bank.io",   role: "User",    status: "Active",    last: "2 min ago",  av: "AC", dept: "Retail"    },
+  { id: 2,  name: "Bob Reyes",    email: "bob@bank.io",     role: "Manager", status: "Active",    last: "14 min ago", av: "BR", dept: "Operations" },
+  { id: 3,  name: "David Kim",    email: "david@bank.io",   role: "User",    status: "Suspended", last: "2 days ago", av: "DK", dept: "Retail"    },
+  { id: 4,  name: "Emeka Osei",   email: "emeka@bank.io",   role: "Analyst", status: "Active",    last: "1h ago",     av: "EO", dept: "Analytics"  },
+  { id: 5,  name: "Sara Mehta",   email: "sara@bank.io",    role: "User",    status: "Active",    last: "30 min ago", av: "SM", dept: "Retail"    },
+  { id: 6,  name: "James Park",   email: "james@bank.io",   role: "Admin",   status: "Active",    last: "5 min ago",  av: "JP", dept: "IT"         },
+  { id: 7,  name: "Nina Volkov",  email: "nina@bank.io",    role: "User",    status: "Inactive",  last: "1 week ago", av: "NV", dept: "HR"         },
+  { id: 8,  name: "Carlos Diaz",  email: "carlos@bank.io",  role: "Analyst", status: "Active",    last: "3h ago",     av: "CD", dept: "Analytics"  },
+];
+
+function UserManagementPage({ themeColor }) {
+  const [users, setUsers]         = useState(INITIAL_USERS);
+  const [selected, setSelected]   = useState(new Set());
+  const [search, setSearch]       = useState("");
+  const [filterRole, setFilterRole]   = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [sortField, setSortField] = useState("name");
+  const [sortAsc, setSortAsc]     = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addTab, setAddTab]           = useState("single"); // "single" | "excel"
+  const [newUser, setNewUser]         = useState({ name: "", email: "", role: "User", dept: "Retail" });
+  const [importRows, setImportRows]   = useState([]); // parsed excel rows
+  const [importErrors, setImportErrors] = useState([]);
+  const [dragOver, setDragOver]       = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(null);
+  const [editingUser, setEditingUser]  = useState(null); // user object being edited
+  const [toast, setToast]             = useState(null);
+  const fileInputRef                  = useRef(null);
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Filtered + sorted list
+  const displayed = useMemo(() => {
+    let list = users.filter((u) => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q) || u.dept.toLowerCase().includes(q);
+      const matchRole   = filterRole   === "All" || u.role   === filterRole;
+      const matchStatus = filterStatus === "All" || u.status === filterStatus;
+      return matchSearch && matchRole && matchStatus;
+    });
+    list = [...list].sort((a, b) => {
+      const va = a[sortField]?.toLowerCase?.() ?? a[sortField];
+      const vb = b[sortField]?.toLowerCase?.() ?? b[sortField];
+      return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
+    return list;
+  }, [users, search, filterRole, filterStatus, sortField, sortAsc]);
+
+  const allVisibleSelected = displayed.length > 0 && displayed.every((u) => selected.has(u.id));
+
+  const toggleAll = () => {
+    if (allVisibleSelected) {
+      setSelected((p) => { const n = new Set(p); displayed.forEach((u) => n.delete(u.id)); return n; });
+    } else {
+      setSelected((p) => { const n = new Set(p); displayed.forEach((u) => n.add(u.id)); return n; });
+    }
+  };
+
+  const toggleOne = (id) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const executeBulk = (action) => {
+    setUsers((prev) => prev.map((u) => {
+      if (!selected.has(u.id)) return u;
+      if (action === "activate")  return { ...u, status: "Active"    };
+      if (action === "suspend")   return { ...u, status: "Suspended" };
+      if (action === "deactivate")return { ...u, status: "Inactive"  };
+      return u;
+    }).filter((u) => action !== "delete" || !selected.has(u.id)));
+    showToast(`${action === "delete" ? "Deleted" : action.charAt(0).toUpperCase() + action.slice(1) + "d"} ${selected.size} user(s)`);
+    setSelected(new Set());
+    setBulkConfirm(null);
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortAsc(!sortAsc);
+    else { setSortField(field); setSortAsc(true); }
+  };
+
+  const addUser = () => {
+    if (!newUser.name || !newUser.email) return;
+    const initials = newUser.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    setUsers((p) => [...p, { ...newUser, id: Date.now(), status: "Active", last: "Just now", av: initials }]);
+    showToast(`User "${newUser.name}" added successfully`);
+    setNewUser({ name: "", email: "", role: "User", dept: "Retail" });
+    setShowAddModal(false);
+  };
+
+  const saveEdit = () => {
+    if (!editingUser.name || !editingUser.email) return;
+    const initials = editingUser.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    setUsers((p) => p.map((u) => u.id === editingUser.id ? { ...editingUser, av: initials } : u));
+    showToast(`User "${editingUser.name}" updated successfully`);
+    setEditingUser(null);
+  };
+
+  // ── Excel / CSV parser (no external lib needed for CSV; use SheetJS for xlsx)
+  const parseFile = (file) => {
+    if (!file) return;
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    if (ext === "csv") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const lines = e.target.result.split("\n").map((l) => l.trim()).filter(Boolean);
+        const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/[^a-z]/g,""));
+        const rows = lines.slice(1).map((line, idx) => {
+          const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+          const obj = {};
+          headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+          const name  = obj.name  || obj.fullname || obj.username || "";
+          const email = obj.email || obj.emailaddress || "";
+          const role  = ["Admin","Manager","Analyst","User"].find((r) => r.toLowerCase() === (obj.role||"").toLowerCase()) || "User";
+          const dept  = obj.dept || obj.department || "Retail";
+          const err   = !name ? "Missing name" : !email ? "Missing email" : !email.includes("@") ? "Invalid email" : "";
+          return { _row: idx + 2, name, email, role, dept, _err: err };
+        });
+        setImportRows(rows);
+        setImportErrors(rows.filter((r) => r._err));
+      };
+      reader.readAsText(file);
+    } else if (ext === "xlsx" || ext === "xls") {
+      // Use SheetJS (already available in project or cdn)
+      import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs").then((XLSX) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const wb   = XLSX.read(e.target.result, { type: "array" });
+          const ws   = wb.Sheets[wb.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const rows = data.map((obj, idx) => {
+            const keys = Object.keys(obj).reduce((a, k) => { a[k.toLowerCase().replace(/[^a-z]/g,"")] = obj[k]; return a; }, {});
+            const name  = String(keys.name  || keys.fullname || keys.username || "").trim();
+            const email = String(keys.email || keys.emailaddress || "").trim();
+            const role  = ["Admin","Manager","Analyst","User"].find((r) => r.toLowerCase() === String(keys.role||"").toLowerCase()) || "User";
+            const dept  = String(keys.dept || keys.department || "Retail").trim();
+            const err   = !name ? "Missing name" : !email ? "Missing email" : !email.includes("@") ? "Invalid email" : "";
+            return { _row: idx + 2, name, email, role, dept, _err: err };
+          });
+          setImportRows(rows);
+          setImportErrors(rows.filter((r) => r._err));
+        };
+        reader.readAsArrayBuffer(file);
+      }).catch(() => {
+        showToast("Could not load Excel parser. Please use CSV format.", "error");
+      });
+    } else {
+      showToast("Please upload a .xlsx, .xls or .csv file", "error");
+    }
+  };
+
+  const importUsers = () => {
+    const valid = importRows.filter((r) => !r._err);
+    if (!valid.length) return;
+    const newOnes = valid.map((r) => ({
+      id: Date.now() + Math.random(),
+      name:   r.name,
+      email:  r.email,
+      role:   r.role,
+      dept:   r.dept,
+      status: "Active",
+      last:   "Just now",
+      av:     r.name.split(" ").map((w) => w[0]).join("").slice(0,2).toUpperCase(),
+    }));
+    setUsers((p) => [...p, ...newOnes]);
+    showToast(`✅ Imported ${valid.length} user${valid.length > 1 ? "s" : ""} successfully`);
+    setImportRows([]);
+    setImportErrors([]);
+    setShowAddModal(false);
+  };
+
+  const downloadTemplate = () => {
+    const csv = "Name,Email,Role,Department\nJane Smith,jane@bank.io,User,Retail\nJohn Doe,john@bank.io,Manager,Operations";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "user_import_template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const statusColor = (s) => s === "Active" ? { bg: "#d1fae5", col: "#10b981" } : s === "Suspended" ? { bg: "#fee2e2", col: "#ef4444" } : { bg: "#f1f5f9", col: "#94a3b8" };
+  const roles   = ["All", "Admin", "Manager", "Analyst", "User"];
+  const statuses = ["All", "Active", "Suspended", "Inactive"];
+  const sortIcon = (f) => sortField === f ? (sortAsc ? " ↑" : " ↓") : " ↕";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Inline toast */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: toast.type === "success" ? "#10b981" : "#ef4444",
+          color: "#fff", padding: "12px 24px", borderRadius: 12,
+          fontWeight: 600, fontSize: 14, zIndex: 9999,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.2)", animation: "slideInRight 0.3s ease" }}>
+          {toast.type === "success" ? "✅" : "⚠️"} {toast.msg}
+        </div>
+      )}
+
+      {/* Bulk confirm modal */}
+      {bulkConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 8000,
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 18, padding: 32,
+            maxWidth: 400, width: "90%", boxShadow: "0 24px 60px rgba(0,0,0,0.2)", animation: "fadeDown 0.2s ease" }}>
+            <div style={{ fontSize: 40, marginBottom: 12, textAlign: "center" }}>
+              {bulkConfirm.action === "delete" ? "🗑️" : "⚠️"}
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "var(--text-main)", textAlign: "center", marginBottom: 8 }}>
+              {bulkConfirm.label} {selected.size} user{selected.size > 1 ? "s" : ""}?
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-sub)", textAlign: "center", marginBottom: 24 }}>
+              This action will be applied to all selected users.
+            </div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button onClick={() => setBulkConfirm(null)}
+                style={{ padding: "10px 24px", borderRadius: 10, border: "1px solid var(--border)",
+                  background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={() => executeBulk(bulkConfirm.action)}
+                style={{ padding: "10px 24px", borderRadius: 10, border: "none",
+                  background: bulkConfirm.action === "delete" ? "#ef4444" : themeColor,
+                  color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Import User Modal */}
+      {showAddModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 8000,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 22, width: "100%", maxWidth: 560,
+            boxShadow: "0 30px 80px rgba(0,0,0,0.25)", animation: "fadeDown 0.22s ease", overflow: "hidden" }}>
+
+            {/* Modal header */}
+            <div style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)`,
+              padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>Add Users</div>
+              <button onClick={() => { setShowAddModal(false); setImportRows([]); setImportErrors([]); }}
+                style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
+                  color: "#fff", cursor: "pointer", fontSize: 18, width: 32, height: 32,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", borderBottom: "1px solid var(--border)", padding: "0 28px" }}>
+              {[["single","👤 Single User"],["excel","📊 Import from Excel / CSV"]].map(([id,label]) => (
+                <button key={id} onClick={() => { setAddTab(id); setImportRows([]); setImportErrors([]); }}
+                  style={{ padding: "14px 18px", fontSize: 13, fontWeight: addTab===id ? 700 : 500,
+                    color: addTab===id ? themeColor : "var(--text-sub)",
+                    background: "none", border: "none",
+                    borderBottom: `2px solid ${addTab===id ? themeColor : "transparent"}`,
+                    cursor: "pointer", whiteSpace: "nowrap" }}>{label}</button>
+              ))}
+            </div>
+
+            <div style={{ padding: "24px 28px", maxHeight: "65vh", overflowY: "auto" }}>
+
+              {/* ── SINGLE USER TAB ── */}
+              {addTab === "single" && (
+                <>
+                  {[["Full Name","name","text","e.g. Jane Smith"],["Email","email","email","e.g. jane@bank.io"]].map(([label,key,type,ph]) => (
+                    <div key={key} style={{ marginBottom: 16 }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: 6 }}>{label}</label>
+                      <input type={type} placeholder={ph} value={newUser[key]}
+                        onChange={(e) => setNewUser((p) => ({ ...p, [key]: e.target.value }))}
+                        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
+                          border: "1px solid var(--border)", background: "var(--hover-bg)",
+                          color: "var(--text-main)", outline: "none" }} />
+                    </div>
+                  ))}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 }}>
+                    {[["Role","role",["User","Manager","Analyst","Admin"]],["Department","dept",["Retail","Operations","Analytics","IT","HR"]]].map(([label,key,opts]) => (
+                      <div key={key}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-sub)", display: "block", marginBottom: 6 }}>{label}</label>
+                        <select value={newUser[key]} onChange={(e) => setNewUser((p) => ({ ...p, [key]: e.target.value }))}
+                          style={{ width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
+                            border: "1px solid var(--border)", background: "var(--hover-bg)",
+                            color: "var(--text-main)", outline: "none" }}>
+                          {opts.map((o) => <option key={o}>{o}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button onClick={() => setShowAddModal(false)}
+                      style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid var(--border)",
+                        background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                    <button onClick={addUser}
+                      style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none",
+                        background: themeColor, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                      Add User
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ── EXCEL / CSV TAB ── */}
+              {addTab === "excel" && (
+                <>
+                  {/* Download template */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <span style={{ fontSize: 13, color: "var(--text-sub)" }}>
+                      Upload an Excel (.xlsx) or CSV file with columns: <b>Name, Email, Role, Department</b>
+                    </span>
+                    <button onClick={downloadTemplate}
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px",
+                        borderRadius: 8, border: `1px solid ${themeColor}`, background: themeColor + "15",
+                        color: themeColor, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      ⬇ Download Template
+                    </button>
+                  </div>
+
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault(); setDragOver(false);
+                      const file = e.dataTransfer.files[0];
+                      if (file) parseFile(file);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      border: `2px dashed ${dragOver ? themeColor : "var(--border)"}`,
+                      borderRadius: 14, padding: "36px 24px", textAlign: "center",
+                      background: dragOver ? themeColor + "08" : "var(--hover-bg)",
+                      cursor: "pointer", transition: "all 0.2s", marginBottom: 16,
+                    }}>
+                    <div style={{ fontSize: 40, marginBottom: 10 }}>📂</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", marginBottom: 4 }}>
+                      {dragOver ? "Drop your file here" : "Drag & drop or click to upload"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-sub)" }}>
+                      Supports .xlsx, .xls, .csv
+                    </div>
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv"
+                      style={{ display: "none" }}
+                      onChange={(e) => { const f = e.target.files[0]; if (f) parseFile(f); e.target.value = ""; }} />
+                  </div>
+
+                  {/* Preview table */}
+                  {importRows.length > 0 && (
+                    <>
+                      {/* Summary */}
+                      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, padding: "4px 12px", borderRadius: 99,
+                          background: "#d1fae5", color: "#10b981", fontWeight: 700 }}>
+                          ✅ {importRows.filter((r) => !r._err).length} valid
+                        </span>
+                        {importErrors.length > 0 && (
+                          <span style={{ fontSize: 13, padding: "4px 12px", borderRadius: 99,
+                            background: "#fee2e2", color: "#ef4444", fontWeight: 700 }}>
+                            ⚠️ {importErrors.length} error{importErrors.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, color: "var(--text-sub)" }}>
+                          from {importRows.length} rows
+                        </span>
+                      </div>
+
+                      {/* Table */}
+                      <div style={{ overflowX: "auto", borderRadius: 10,
+                        border: "1px solid var(--border)", marginBottom: 20 }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: "var(--hover-bg)" }}>
+                              {["Row","Name","Email","Role","Dept","Status"].map((h) => (
+                                <th key={h} style={{ padding: "9px 12px", textAlign: "left",
+                                  fontSize: 11, fontWeight: 700, color: "var(--text-sub)",
+                                  textTransform: "uppercase", letterSpacing: 0.5,
+                                  borderBottom: "1px solid var(--border)" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importRows.map((r, i) => (
+                              <tr key={i} style={{ borderBottom: "1px solid var(--border)",
+                                background: r._err ? "#fef2f2" : "transparent" }}>
+                                <td style={{ padding: "8px 12px", color: "var(--text-sub)" }}>{r._row}</td>
+                                <td style={{ padding: "8px 12px", color: "var(--text-main)", fontWeight: 500 }}>{r.name || "—"}</td>
+                                <td style={{ padding: "8px 12px", color: "var(--text-sub)" }}>{r.email || "—"}</td>
+                                <td style={{ padding: "8px 12px" }}>
+                                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99,
+                                    background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600 }}>{r.role}</span>
+                                </td>
+                                <td style={{ padding: "8px 12px", color: "var(--text-sub)" }}>{r.dept}</td>
+                                <td style={{ padding: "8px 12px" }}>
+                                  {r._err
+                                    ? <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600 }}>⚠️ {r._err}</span>
+                                    : <span style={{ fontSize: 11, color: "#10b981", fontWeight: 600 }}>✅ OK</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Error details */}
+                      {importErrors.length > 0 && (
+                        <div style={{ background: "#fef2f2", borderRadius: 10, padding: "12px 16px",
+                          marginBottom: 16, fontSize: 13, color: "#ef4444" }}>
+                          <b>Fix these before importing:</b>
+                          <ul style={{ margin: "6px 0 0 18px", lineHeight: 1.8 }}>
+                            {importErrors.map((e, i) => (
+                              <li key={i}>Row {e._row}: {e._err} {e.name ? `(${e.name})` : ""}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <button onClick={() => { setImportRows([]); setImportErrors([]); }}
+                          style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid var(--border)",
+                            background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                          Clear & Re-upload
+                        </button>
+                        <button onClick={importUsers}
+                          disabled={importRows.filter((r) => !r._err).length === 0}
+                          style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none",
+                            background: importRows.filter((r) => !r._err).length === 0 ? "#e2e8f0" : themeColor,
+                            color: importRows.filter((r) => !r._err).length === 0 ? "#94a3b8" : "#fff",
+                            fontWeight: 700, fontSize: 14, cursor: importRows.filter((r) => !r._err).length === 0 ? "not-allowed" : "pointer" }}>
+                          Import {importRows.filter((r) => !r._err).length} User{importRows.filter((r) => !r._err).length !== 1 ? "s" : ""}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT USER MODAL ── */}
+      {editingUser && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 8000,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 22, width: "100%", maxWidth: 500,
+            boxShadow: "0 30px 80px rgba(0,0,0,0.25)", animation: "fadeDown 0.22s ease", overflow: "hidden" }}>
+
+            {/* Header */}
+            <div style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)`,
+              padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.25)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+                  {editingUser.av}
+                </div>
+                <div>
+                  <div style={{ color: "#fff", fontWeight: 800, fontSize: 17 }}>Edit User</div>
+                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 }}>{editingUser.email}</div>
+                </div>
+              </div>
+              <button onClick={() => setEditingUser(null)}
+                style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
+                  color: "#fff", cursor: "pointer", fontSize: 18, width: 32, height: 32,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "24px 28px" }}>
+
+              {/* Name + Email */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                {[["Full Name","name","text","e.g. Jane Smith"],["Email","email","email","e.g. jane@bank.io"]].map(([label,key,type,ph]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-sub)",
+                      display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</label>
+                    <input type={type} placeholder={ph} value={editingUser[key] || ""}
+                      onChange={(e) => setEditingUser((p) => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
+                        border: `1px solid ${editingUser[key] ? "var(--border)" : "#ef4444"}`,
+                        background: "var(--hover-bg)", color: "var(--text-main)", outline: "none",
+                        boxSizing: "border-box" }} />
+                    {!editingUser[key] && (
+                      <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>Required</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Role + Department + Status */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
+                {[
+                  ["Role",       "role",   ["User","Manager","Analyst","Admin"]],
+                  ["Department", "dept",   ["Retail","Operations","Analytics","IT","HR"]],
+                  ["Status",     "status", ["Active","Suspended","Inactive"]],
+                ].map(([label, key, opts]) => (
+                  <div key={key}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-sub)",
+                      display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</label>
+                    <select value={editingUser[key]} onChange={(e) => setEditingUser((p) => ({ ...p, [key]: e.target.value }))}
+                      style={{ width: "100%", padding: "10px 14px", borderRadius: 10, fontSize: 14,
+                        border: "1px solid var(--border)", background: "var(--hover-bg)",
+                        color: key === "status"
+                          ? editingUser.status === "Active" ? "#10b981" : editingUser.status === "Suspended" ? "#ef4444" : "#94a3b8"
+                          : "var(--text-main)",
+                        fontWeight: key === "status" ? 700 : 400,
+                        outline: "none" }}>
+                      {opts.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {/* Preview badge row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+                background: "var(--hover-bg)", borderRadius: 12, marginBottom: 22 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: themeColor,
+                  color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                  {editingUser.name?.split(" ").map((w) => w[0]).join("").slice(0,2).toUpperCase() || "?"}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-main)" }}>{editingUser.name || "—"}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-sub)" }}>{editingUser.email || "—"} · {editingUser.dept}</div>
+                </div>
+                <span style={{ fontSize: 12, padding: "3px 12px", borderRadius: 99, fontWeight: 600,
+                  background: "var(--bg-card)", color: "var(--text-main)", border: "1px solid var(--border)" }}>
+                  {editingUser.role}
+                </span>
+                <span style={{ fontSize: 12, padding: "3px 12px", borderRadius: 99, fontWeight: 700,
+                  background: editingUser.status === "Active" ? "#d1fae5" : editingUser.status === "Suspended" ? "#fee2e2" : "#f1f5f9",
+                  color:      editingUser.status === "Active" ? "#10b981" : editingUser.status === "Suspended" ? "#ef4444" : "#94a3b8" }}>
+                  {editingUser.status}
+                </span>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => setEditingUser(null)}
+                  style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid var(--border)",
+                    background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                  Cancel
+                </button>
+                <button onClick={saveEdit}
+                  disabled={!editingUser.name || !editingUser.email}
+                  style={{ flex: 1, padding: "11px", borderRadius: 10, border: "none",
+                    background: !editingUser.name || !editingUser.email ? "#e2e8f0" : themeColor,
+                    color: !editingUser.name || !editingUser.email ? "#94a3b8" : "#fff",
+                    fontWeight: 700, fontSize: 14,
+                    cursor: !editingUser.name || !editingUser.email ? "not-allowed" : "pointer" }}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+        {[
+          { label: "Total Users",   val: users.length,                                          icon: "👥", col: themeColor },
+          { label: "Active",        val: users.filter((u) => u.status === "Active").length,      icon: "🟢", col: "#10b981" },
+          { label: "Suspended",     val: users.filter((u) => u.status === "Suspended").length,   icon: "🔴", col: "#ef4444" },
+          { label: "Inactive",      val: users.filter((u) => u.status === "Inactive").length,    icon: "⚫", col: "#94a3b8" },
+        ].map((s) => (
+          <div key={s.label} className="glass-card" style={{ "--card-color": s.col, padding: "16px 18px" }}>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text-main)" }}>{s.val}</div>
+            <div style={{ fontSize: 12, color: "var(--text-sub)", marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main table card */}
+      <div className="glass-card" style={{ "--card-color": themeColor, padding: "22px 24px" }}>
+
+        {/* Toolbar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: "var(--text-main)" }}>
+            User Management
+            {selected.size > 0 && (
+              <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 600,
+                background: themeColor + "20", color: themeColor, borderRadius: 99, padding: "2px 10px" }}>
+                {selected.size} selected
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {/* Search */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--hover-bg)",
+              borderRadius: 10, padding: "8px 14px", border: "1px solid var(--border)" }}>
+              <span style={{ color: "var(--text-sub)" }}>🔍</span>
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search users…" style={{ border: "none", outline: "none", fontSize: 13,
+                  background: "transparent", color: "var(--text-main)", width: 160 }} />
+            </div>
+            {/* Role filter */}
+            <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--border)",
+                background: "var(--hover-bg)", color: "var(--text-main)", fontSize: 13, cursor: "pointer" }}>
+              {roles.map((r) => <option key={r}>{r}</option>)}
+            </select>
+            {/* Status filter */}
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid var(--border)",
+                background: "var(--hover-bg)", color: "var(--text-main)", fontSize: 13, cursor: "pointer" }}>
+              {statuses.map((s) => <option key={s}>{s}</option>)}
+            </select>
+            {/* Add User */}
+            <button onClick={() => setShowAddModal(true)}
+              style={{ background: themeColor, color: "#fff", border: "none", borderRadius: 10,
+                padding: "8px 16px", fontSize: 13, cursor: "pointer", fontWeight: 700,
+                display: "flex", alignItems: "center", gap: 6 }}>
+              + Add User
+            </button>
+          </div>
+        </div>
+
+        {/* Bulk action bar — shows only when rows selected */}
+        {selected.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px",
+            background: themeColor + "12", borderRadius: 10, marginBottom: 14,
+            border: `1px solid ${themeColor}30`, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+              {selected.size} user{selected.size > 1 ? "s" : ""} selected — Bulk actions:
+            </span>
+            {[
+              { label: "✅ Activate",   action: "activate",   col: "#10b981" },
+              { label: "⏸ Suspend",    action: "suspend",    col: "#f97316" },
+              { label: "🚫 Deactivate",action: "deactivate", col: "#94a3b8" },
+              { label: "🗑️ Delete",    action: "delete",     col: "#ef4444" },
+            ].map((b) => (
+              <button key={b.action}
+                onClick={() => setBulkConfirm({ action: b.action, label: b.label.split(" ")[1] })}
+                style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${b.col}40`,
+                  background: b.col + "15", color: b.col, fontSize: 12,
+                  fontWeight: 700, cursor: "pointer" }}>
+                {b.label}
+              </button>
+            ))}
+            <button onClick={() => setSelected(new Set())}
+              style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)",
+                background: "var(--hover-bg)", color: "var(--text-sub)", fontSize: 12, cursor: "pointer" }}>
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Table header */}
+        <div style={{ display: "grid", gridTemplateColumns: "40px 2fr 1.5fr 1fr 1fr 1fr 90px",
+          gap: 12, padding: "8px 12px", borderBottom: "2px solid var(--border)", marginBottom: 4 }}>
+          {/* Select all checkbox */}
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: themeColor }} />
+          </div>
+          {[["name","Name"], ["email","Email"], ["role","Role"], ["dept","Dept."], ["status","Status"]].map(([f, l]) => (
+            <div key={f} onClick={() => handleSort(f)}
+              style={{ fontSize: 11, fontWeight: 700, color: "var(--text-sub)",
+                textTransform: "uppercase", letterSpacing: 0.6, cursor: "pointer",
+                userSelect: "none", display: "flex", alignItems: "center", gap: 2 }}>
+              {l}<span style={{ opacity: 0.6 }}>{sortIcon(f)}</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-sub)",
+            textTransform: "uppercase", letterSpacing: 0.6 }}>Actions</div>
+        </div>
+
+        {/* Table rows */}
+        {displayed.length === 0 ? (
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-sub)", fontSize: 14 }}>
+            No users match your filters.
+          </div>
+        ) : displayed.map((u) => {
+          const sc   = statusColor(u.status);
+          const isSel = selected.has(u.id);
+          return (
+            <div key={u.id}
+              style={{ display: "grid", gridTemplateColumns: "40px 2fr 1.5fr 1fr 1fr 1fr 90px",
+                gap: 12, padding: "11px 12px", borderRadius: 10, alignItems: "center",
+                background: isSel ? themeColor + "10" : "transparent",
+                borderBottom: "1px solid var(--border)",
+                transition: "background 0.15s", cursor: "default" }}
+              onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = isSel ? themeColor + "10" : "transparent"; }}>
+
+              <input type="checkbox" checked={isSel} onChange={() => toggleOne(u.id)}
+                style={{ width: 16, height: 16, cursor: "pointer", accentColor: themeColor }} />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: themeColor,
+                  color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{u.av}</div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-main)" }}>{u.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-sub)" }}>{u.last}</div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 13, color: "var(--text-sub)", overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div>
+
+              <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99,
+                background: "var(--hover-bg)", color: "var(--text-main)", fontWeight: 600,
+                display: "inline-block" }}>{u.role}</span>
+
+              <div style={{ fontSize: 12, color: "var(--text-sub)" }}>{u.dept}</div>
+
+              <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 99,
+                background: sc.bg, color: sc.col, fontWeight: 700, display: "inline-block" }}>
+                {u.status}
+              </span>
+
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setEditingUser({ ...u })}
+                  title="Edit user"
+                  style={{ background: "var(--hover-bg)", border: "1px solid var(--border)",
+                    borderRadius: 7, width: 30, height: 30, cursor: "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  ✏️
+                </button>
+                <button onClick={() => { setUsers((p) => p.filter((x) => x.id !== u.id)); showToast(`Deleted ${u.name}`); }}
+                  title="Delete user"
+                  style={{ background: "var(--hover-bg)", border: "1px solid var(--border)",
+                    borderRadius: 7, width: 30, height: 30, cursor: "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  🗑️
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+          marginTop: 16, fontSize: 13, color: "var(--text-sub)" }}>
+          <span>Showing {displayed.length} of {users.length} users</span>
+          <span>{selected.size > 0 ? `${selected.size} selected` : "No selection"}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -884,6 +1569,73 @@ function UserOverview({ user, themeColor }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+const SAMPLE_NOTIFICATIONS = [
+  { id: 1, icon: "💰", title: "Salary Credited",       body: "₹85,000 credited to your account",  time: "2 min ago",  unread: true,  color: "#10b981" },
+  { id: 2, icon: "🔐", title: "Login from new device", body: "Chrome · Mumbai · Mar 7 2026",       time: "15 min ago", unread: true,  color: "#f97316" },
+  { id: 3, icon: "📄", title: "Invoice #INV-0041 Paid",body: "Acme Corp paid $4,200",              time: "1h ago",     unread: true,  color: "#6366f1" },
+  { id: 4, icon: "⚠️", title: "Failed login attempt",  body: "3 failed attempts detected",         time: "3h ago",     unread: false, color: "#ef4444" },
+  { id: 5, icon: "🔄", title: "Session refreshed",     body: "Your session was auto-renewed",      time: "5h ago",     unread: false, color: "#2f8cf7" },
+  { id: 6, icon: "✅", title: "Profile updated",       body: "Your profile info was saved",        time: "Yesterday",  unread: false, color: "#10b981" },
+];
+
+function NotificationsPanel({ open, onClose, themeColor, dark }) {
+  const [notes, setNotes] = React.useState(SAMPLE_NOTIFICATIONS);
+  const unread = notes.filter((n) => n.unread).length;
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 7000 }} onClick={onClose}>
+      <div style={{ position: "absolute", top: 68, right: 20, width: 360,
+        background: dark ? "#1e293b" : "#fff", borderRadius: 18,
+        boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
+        border: `1px solid ${dark ? "#334155" : "#e5e7eb"}`,
+        overflow: "hidden", animation: "fadeDown 0.2s ease" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "16px 20px", borderBottom: `1px solid ${dark ? "#334155" : "#f1f5f9"}` }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: dark ? "#f1f5f9" : "#1e293b" }}>
+            Notifications
+            {unread > 0 && <span style={{ background: "#ef4444", color: "#fff", borderRadius: 99,
+              fontSize: 11, padding: "1px 7px", marginLeft: 6 }}>{unread}</span>}
+          </div>
+          <button onClick={() => setNotes((p) => p.map((n) => ({ ...n, unread: false })))}
+            style={{ fontSize: 12, color: themeColor, background: "none", border: "none",
+              cursor: "pointer", fontWeight: 600 }}>Mark all read</button>
+        </div>
+        <div style={{ maxHeight: 380, overflowY: "auto" }}>
+          {notes.map((n) => (
+            <div key={n.id}
+              onClick={() => setNotes((p) => p.map((x) => x.id === n.id ? { ...x, unread: false } : x))}
+              style={{ display: "flex", gap: 12, padding: "13px 20px", cursor: "pointer",
+                background: n.unread ? (dark ? "#1e3a4a" : `${n.color}08`) : "transparent",
+                borderBottom: `1px solid ${dark ? "#334155" : "#f8fafc"}`, transition: "background 0.15s" }}
+              onMouseEnter={(e) => e.currentTarget.style.background = dark ? "#263348" : "#f8fafc"}
+              onMouseLeave={(e) => e.currentTarget.style.background = n.unread ? (dark ? "#1e3a4a" : `${n.color}08`) : "transparent"}>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: `${n.color}18`,
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{n.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: dark ? "#f1f5f9" : "#1e293b" }}>{n.title}</span>
+                  {n.unread && <div style={{ width: 8, height: 8, borderRadius: "50%", background: themeColor, flexShrink: 0 }} />}
+                </div>
+                <div style={{ fontSize: 12, color: dark ? "#94a3b8" : "#64748b", marginTop: 2 }}>{n.body}</div>
+                <div style={{ fontSize: 11, color: dark ? "#64748b" : "#94a3b8", marginTop: 3 }}>{n.time}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "12px 20px", textAlign: "center",
+          borderTop: `1px solid ${dark ? "#334155" : "#f1f5f9"}` }}>
+          <button style={{ fontSize: 13, color: themeColor, background: "none", border: "none",
+            cursor: "pointer", fontWeight: 600 }}>View all notifications →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 function Dashboard() {
@@ -891,13 +1643,14 @@ function Dashboard() {
   const [isLoading, setIsLoading]         = useState(true);
   const [activeMenu, setActiveMenu]       = useState(null);
   const [showDropdown, setShowDropdown]   = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile]     = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarOpen, setSidebarOpen]     = useState(true);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [dark, setDark]                   = useState(false);
   const [timeLeft, setTimeLeft]           = useState(null);
   const profileRef                        = useRef(null);
+  const welcomeShown                      = useRef(false);
   const { toasts, add: addToast, remove: removeToast } = useToast();
 
   // Apply dark/light CSS vars on toggle
@@ -913,7 +1666,7 @@ function Dashboard() {
           const rem = u.exp - Math.floor(Date.now() / 1000);
           setTimeLeft(rem > 0 ? rem : 0);
         }
-        addToast(`Welcome back, ${u?.name || "User"}! 👋`, "success", 3000);
+        if (!welcomeShown.current) { welcomeShown.current = true; addToast(`Welcome back, ${u?.name || "User"}! 👋`, "success", 3500); }
       })
       .catch(() => addToast("Failed to load user data.", "error"))
       .finally(() => setIsLoading(false));
@@ -970,20 +1723,17 @@ function Dashboard() {
   const pageTitle   = PAGE_TITLE[role];
   const activeItem  = activeMenu ? menuItems.find((m) => m.label === activeMenu) || menuItems[0] : menuItems[0];
   const isOverview  = !activeMenu || activeItem?.label === menuItems[0]?.label;
-  const unreadCount = SAMPLE_NOTIFICATIONS.filter((n) => n.unread).length;
 
   const handleMenuClick = (label) => {
     setActiveMenu(label);
     setMobileSidebar(false);
-    if (label !== menuItems[0]?.label) addToast(`Navigated to ${label}`, "info", 2000);
+
   };
 
   return (
     <div className="layout" style={{ background: "var(--bg-app)" }}>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <SearchBar role={role} onNavigate={handleMenuClick} dark={dark} />
-
-      {/* Notifications */}
       <NotificationsPanel open={showNotifications} onClose={() => setShowNotifications(false)} themeColor={themeColor} dark={dark} />
 
       {/* Profile Modal */}
@@ -1104,24 +1854,6 @@ function Dashboard() {
                   width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {dark ? "☀️" : "🌙"}
               </button>
-
-              {/* Notifications */}
-              <button onClick={() => { setShowNotifications(!showNotifications); setShowDropdown(false); }}
-                style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 17,
-                  width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center",
-                  position: "relative" }}>
-                🔔
-                {unreadCount > 0 && (
-                  <span style={{ position: "absolute", top: -4, right: -4, background: "#ef4444",
-                    color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 700,
-                    minWidth: 18, height: 18, display: "flex", alignItems: "center",
-                    justifyContent: "center", padding: "0 4px", border: "2px solid " + themeColor }}>
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
               {/* Profile */}
               <div className="profile" ref={profileRef}>
                 <div className="profile-info" onClick={() => setShowDropdown(!showDropdown)}>
@@ -1132,11 +1864,10 @@ function Dashboard() {
                   <div className="dropdown">
                     <div onClick={() => { setShowProfile(true); setShowDropdown(false); }}>👤 View Profile</div>
                     <div>✏ Edit Profile</div>
-                    <div onClick={() => { setShowNotifications(true); setShowDropdown(false); }}>🔔 Notifications {unreadCount > 0 && <span style={{ background: "#ef4444", color: "#fff", borderRadius: 99, fontSize: 10, padding: "1px 6px", marginLeft: 4 }}>{unreadCount}</span>}</div>
                     <div onClick={() => setDark(!dark)}>{dark ? "☀️ Light Mode" : "🌙 Dark Mode"}</div>
                     <div>❓ Help &amp; Support</div>
                     <hr />
-                    <button className="logout" onClick={() => { addToast("Logging out…", "info", 1500); setTimeout(logout, 1500); }}>🚪 Logout</button>
+                    <button className="logout" onClick={logout}>🚪 Logout</button>
                   </div>
                 )}
               </div>
@@ -1167,6 +1898,8 @@ function Dashboard() {
               {role === "employee" && <EmployeeOverview user={user} themeColor={themeColor} />}
               {role === "user"     && <UserOverview     user={user} themeColor={themeColor} />}
             </>
+          ) : activeItem?.label === "User Management" ? (
+            <UserManagementPage themeColor={themeColor} />
           ) : (
             <ComingSoon item={activeItem} themeColor={themeColor} />
           )}

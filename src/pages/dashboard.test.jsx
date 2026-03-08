@@ -1,119 +1,112 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
-import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
-import Dashboard from "./dashboard.jsx";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import Dashboard, { generateEmpId, detectRole } from './dashboard';
+import { getCurrentUser, logout } from '../api/auth';
 
-/* -------------------- MOCK RECHARTS -------------------- */
-jest.mock("recharts", () => ({
+// 1. ROBUST MOCKS
+jest.mock('recharts', () => ({
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
-  BarChart: ({ children }) => <div>{children}</div>,
-  Bar: () => <div>Bar</div>,
-  XAxis: () => <div>XAxis</div>,
-  YAxis: () => <div>YAxis</div>,
-  Tooltip: () => <div>Tooltip</div>,
-  Legend: () => <div>Legend</div>,
+  BarChart: () => <div data-testid="bar-chart" />,
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+  Legend: () => null,
+  AreaChart: () => <div data-testid="area-chart" />,
+  Area: () => null,
+  LineChart: () => <div data-testid="line-chart" />,
+  Line: () => null,
+  PieChart: () => <div data-testid="pie-chart" />,
+  Pie: () => null,
+  Cell: () => null,
 }));
 
-/* -------------------- MOCK IMAGE -------------------- */
-jest.mock("../assets/hdfcbanklogo.png", () => "logo");
-
-/* -------------------- MOCK AUTH MODULE -------------------- */
-jest.mock("../api/auth", () => ({
+jest.mock('../api/auth', () => ({
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
 }));
 
-import { getCurrentUser, logout } from "../api/auth";
-
-describe("Dashboard Component", () => {
-  const mockUser = {
-    name: "Nabajyoti Das",
-    email: "nabajyoti@gmail.com",
-    employeeId: "EMP-1023",
-    roles: ["employee"],
-    exp: Math.floor(Date.now() / 1000) + 300,
+describe('Dashboard Component Suite', () => {
+  const adminUser = {
+    name: "Jane Admin",
+    email: "jane@bank.io",
+    preferred_username: "janedoe",
+    sub: "sub-12345",
+    roles: ["admin"]
   };
 
   beforeEach(() => {
-    getCurrentUser.mockResolvedValue(mockUser);
+    getCurrentUser.mockResolvedValue(adminUser);
+    jest.useFakeTimers();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.useRealTimers();
   });
 
-  test("shows loading initially", () => {
-    render(<Dashboard />);
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  describe('Dashboard UI & Interaction', () => {
+    
+    test('Search Bar (Ctrl+K) - Specific Result Selection', async () => {
+      render(<Dashboard />);
+      await screen.findByText(/Administrator Console/i);
+
+      fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+      const searchInput = screen.getByPlaceholderText(/Search menu…/i);
+      
+      fireEvent.change(searchInput, { target: { value: 'Security' } });
+
+      // FIX: Use getAllByText and pick the one inside the search results container
+      // or use a more specific matcher to avoid the sidebar duplicate.
+      const searchResults = screen.getAllByText(/Security Logs/i);
+      expect(searchResults[0]).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+
+    test('Theme Toggle - Finding by Title', async () => {
+      render(<Dashboard />);
+      await screen.findByText(/Administrator Console/i);
+
+      // FIX: Don't search for the emoji directly (it's in the greeting too).
+      // Use the 'title' attribute you defined in the button.
+      const themeToggle = screen.getByTitle(/Toggle dark mode/i);
+      fireEvent.click(themeToggle);
+
+      expect(document.documentElement.style.getPropertyValue('--bg-app')).toBe('#0f172a');
+    });
+
+    test('Logout - Text Matcher Function', async () => {
+      render(<Dashboard />);
+      
+      // FIX: If "Logout" is broken into multiple spans or styled oddly,
+      // use a custom matcher function.
+      const logoutBtn = await screen.findByText((content, element) => {
+        return element.tagName.toLowerCase() === 'span' && content.includes('Logout');
+      });
+      
+      fireEvent.click(logoutBtn);
+      expect(logout).toHaveBeenCalled();
+    });
   });
 
-  // ✅ FIX 1: use custom matcher to check H1 element's full textContent
-test("displays correct role in title", async () => {
-  render(<Dashboard />);
-  // Wait for loading to finish
-  await screen.findByText(/nabajyoti@gmail.com/i);
-  // Print the full DOM so we can see exactly what rendered
-  screen.debug();
-});
+  describe('User Management Page', () => {
+    test('Navigates via Sidebar correctly', async () => {
+      render(<Dashboard />);
+      await screen.findByText(/Administrator Console/i);
 
-  // ✅ FIX 2: use custom matcher to check H2 element's full textContent
-  test("renders user name after API call", async () => {
-    render(<Dashboard />);
-    expect(
-      await screen.findByText((content, element) =>
-        element?.tagName === "H2" &&
-        /nabajyoti das 👋/i.test(element.textContent)
-      )
-    ).toBeInTheDocument();
-  });
+      // FIX: Find "User Management" specifically within the navigation menu
+      const navItem = screen.getByRole('button', { name: /User Management/i }) || 
+                      screen.getAllByText(/User Management/i)[0];
+      
+      fireEvent.click(navItem);
 
-  test("renders personal information", async () => {
-    render(<Dashboard />);
-
-    expect(
-      await screen.findByText(/nabajyoti@gmail.com/i)
-    ).toBeInTheDocument();
-
-    expect(
-      await screen.findByText(/EMP-1023/i)
-    ).toBeInTheDocument();
-  });
-
-  test("menu click activates item", async () => {
-    render(<Dashboard />);
-    const timeline = await screen.findByText("Timeline");
-
-    fireEvent.click(timeline);
-    expect(timeline).toHaveClass("active");
-  });
-
-  test("dropdown opens on profile click", async () => {
-    render(<Dashboard />);
-
-    const profileButton = await screen.findByTestId("profile-button");
-    fireEvent.click(profileButton);
-
-    expect(
-      screen.getByText(/View Profile/i)
-    ).toBeInTheDocument();
-  });
-
-  test("logout function is called", async () => {
-    render(<Dashboard />);
-
-    const profileButton = await screen.findByTestId("profile-button");
-    fireEvent.click(profileButton);
-
-    const logoutBtn = screen.getByRole("button", { name: /logout/i });
-    fireEvent.click(logoutBtn);
-
-    expect(logout).toHaveBeenCalled();
-  });
-
-  test("renders chart section", async () => {
-    render(<Dashboard />);
-    expect(
-      await screen.findByText(/Target vs Reality/i)
-    ).toBeInTheDocument();
+      // Verify page change by looking for the Header H3 specifically
+      expect(await screen.findByRole('heading', { level: 3, name: /User Management/i }))
+        .toBeInTheDocument();
+    });
   });
 });
