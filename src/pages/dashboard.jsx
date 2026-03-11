@@ -969,64 +969,126 @@ function Dashboard() {
 
   useEffect(() => { applyTheme(dark); }, [dark]);
 
-  useEffect(() => {
-    getCurrentUser()
-      .then((data) => {
-        const u = data?.data ? data.data : data;
-        setUser(u);
-        if (u?.exp) {
-          const rem = u.exp - Math.floor(Date.now() / 1000);
-          setTimeLeft(rem > 0 ? rem : 0);
-        }
-        if (!welcomeShown.current) {
-          welcomeShown.current = true;
-          addToast(`Welcome back, ${u?.name || "User"}! 👋`, "success", 3500);
-        }
-      })
-      .catch(() => addToast("Failed to load user data.", "error"))
-      .finally(() => setIsLoading(false));
-  }, []);
+  // Load user when dashboard starts
+useEffect(() => {
+  getCurrentUser()
+    .then((data) => {
+      const u = data?.data ? data.data : data;
+      setUser(u);
 
-  useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) { if (timeLeft === 0) logout(); return; }
-    if (timeLeft === 120) addToast("⚠️ Session expires in 2 minutes!", "warning", 6000);
-    if (timeLeft === 30)  addToast("🚨 Session expiring in 30 seconds!", "error", 0);
-    const iv = setInterval(() => setTimeLeft((p) => {
-      if (p <= 1) { clearInterval(iv); logout(); return 0; }
-      return p - 1;
-    }), 1000);
-    return () => clearInterval(iv);
-  }, [timeLeft]);
+      if (u?.exp) {
+        const rem = u.exp - Math.floor(Date.now() / 1000);
+        setTimeLeft(rem > 0 ? rem : 0);
+      }
 
-  const refreshSession = useCallback(() => {
-    fetch("http://localhost:8000/refresh", { method: "POST", credentials: "include" })
-      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(() => getCurrentUser())
-      .then((data) => {
-        const u = data?.data || data;
-        setUser(u);
-        if (u?.exp) { const rem = u.exp - Math.floor(Date.now() / 1000); setTimeLeft(rem > 0 ? rem : 0); }
-        addToast("Session refreshed ✅", "success", 3000);
-      })
-      .catch(() => { addToast("Session refresh failed. Logging out…", "error", 2000); setTimeout(logout, 2000); });
-  }, []);
+      if (!welcomeShown.current) {
+        welcomeShown.current = true;
+        addToast(`Welcome back, ${u?.name || "User"}! 👋`, "success", 3500);
+      }
+    })
+    .catch(() => addToast("Failed to load user data.", "error"))
+    .finally(() => setIsLoading(false));
+}, []);
 
-  useEffect(() => { if (timeLeft === 30) refreshSession(); }, [timeLeft, refreshSession]);
 
-  useEffect(() => {
-    const h = (e) => { if (profileRef.current && !profileRef.current.contains(e.target)) setShowDropdown(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner" />
-        <p className="loading-text">Loading dashboard…</p>
-      </div>
-    );
+// Session countdown timer
+useEffect(() => {
+  if (timeLeft === null || timeLeft <= 0) {
+    if (timeLeft === 0) logout();
+    return;
   }
+
+  if (timeLeft === 120)
+    addToast("⚠️ Session expires in 2 minutes!", "warning", 6000);
+
+  if (timeLeft === 30)
+    addToast("🚨 Session expiring in 30 seconds!", "error", 0);
+
+  const iv = setInterval(() => {
+    setTimeLeft((prev) => {
+      if (prev <= 1) {
+        clearInterval(iv);
+        logout();
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(iv);
+}, [timeLeft]);
+
+
+// Secure refresh function (CSRF protected)
+const refreshSession = useCallback(() => {
+
+  const csrfToken = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("csrf_token="))
+    ?.split("=")[1];
+
+  fetch("http://localhost/refresh", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "X-CSRF-Token": csrfToken || "",
+    },
+  })
+    .then((res) => {
+      if (!res.ok) throw new Error();
+      return res.json();
+    })
+    .then(() => getCurrentUser())
+    .then((data) => {
+      const u = data?.data || data;
+
+      setUser(u);
+
+      if (u?.exp) {
+        const remaining = u.exp - Math.floor(Date.now() / 1000);
+        setTimeLeft(remaining > 0 ? remaining : 0);
+      }
+
+      addToast("Session refreshed ✅", "success", 3000);
+    })
+    .catch(() => {
+      addToast("Session refresh failed. Logging out…", "error", 2000);
+      setTimeout(logout, 2000);
+    });
+
+}, []);
+
+
+// Trigger refresh when 30 seconds left
+useEffect(() => {
+  if (timeLeft === 30) {
+    refreshSession();
+  }
+}, [timeLeft, refreshSession]);
+
+
+// Close profile dropdown when clicking outside
+useEffect(() => {
+  const handleClickOutside = (e) => {
+    if (profileRef.current && !profileRef.current.contains(e.target)) {
+      setShowDropdown(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, []);
+
+
+// Loading screen
+if (isLoading) {
+  return (
+    <div className="loading-screen">
+      <div className="spinner" />
+      <p className="loading-text">Loading dashboard…</p>
+    </div>
+  );
+}
 
   if (!user) {
     return (
