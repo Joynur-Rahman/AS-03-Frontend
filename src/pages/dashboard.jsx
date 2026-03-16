@@ -76,8 +76,8 @@ const SIDEBAR_MENUS = {
 const ROLE_THEME = {
   admin:    "#365f7c",
   manager:  "#2f8cf7",
-  employee: "#4e73df",
-  user:     "#7c3aed",
+  employee: "#44568c",
+  user:     "#3a64ed",
 };
 
 const PAGE_TITLE = {
