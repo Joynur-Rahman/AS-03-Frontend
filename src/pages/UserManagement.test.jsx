@@ -1,573 +1,622 @@
-/* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
 import React from "react";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import UserManagement from "./Usermanagement";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MOCK DATA
-// ─────────────────────────────────────────────────────────────────────────────
-const MOCK_USERS = [
-  { id: "u1", firstName: "Alice", lastName: "Chen",  email: "alice@bank.io", enabled: true  },
-  { id: "u2", firstName: "Bob",   lastName: "Reyes", email: "bob@bank.io",   enabled: false },
-  { id: "u3", username: "david",                     email: "david@bank.io", enabled: true  },
+// ─── Mock global fetch & alert ────────────────────────────────────────────────
+beforeEach(() => {
+  jest.clearAllMocks();
+  global.fetch = jest.fn();
+  global.alert = jest.fn();
+});
+
+// ─── Sample data ──────────────────────────────────────────────────────────────
+const mockUsers = [
+  { id: "u1", firstName: "Alice", lastName: "Smith", email: "alice@bank.io", enabled: true  },
+  { id: "u2", firstName: "Bob",   lastName: "Jones", email: "bob@bank.io",   enabled: true  },
+  { id: "u3", firstName: "Carol", lastName: "White", email: "carol@bank.io", enabled: false },
+  { id: "u4", firstName: "David", lastName: "Brown", email: "david@bank.io", enabled: true  },
+  { id: "u5", firstName: "Eva",   lastName: "Green", email: "eva@bank.io",   enabled: true  },
+  { id: "u6", firstName: "Frank", lastName: "Black", email: "frank@bank.io", enabled: false },
 ];
 
-const MOCK_ROLES = [{ name: "manager" }, { name: "user" }];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FETCH MOCK FACTORY
-// ─────────────────────────────────────────────────────────────────────────────
-function mockFetch(overrides = {}) {
-  global.fetch = jest.fn((url, options = {}) => {
-    const method = options.method || "GET";
-
-    // GET /admin/users
-    if (url.includes("/admin/users") && !url.includes("/roles") && method === "GET") {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(MOCK_USERS),
-      });
-    }
-
-    // GET /admin/users/:id/roles
-    if (url.includes("/roles") && method === "GET") {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(MOCK_ROLES),
-      });
-    }
-
-    // POST /admin/bulk-users
-    if (url.includes("/bulk-users") && method === "POST") {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([{ status: "created", email: "new@bank.io" }]),
-      });
-    }
-
-    // DELETE /admin/users/:id  (not roles)
-    if (url.match(/\/admin\/users\/[^/]+$/) && method === "DELETE") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-
-    // POST /admin/users/:id/roles  (assign)
-    if (url.includes("/roles") && method === "POST") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-
-    // DELETE /admin/users/:id/roles  (remove role)
-    if (url.includes("/roles") && method === "DELETE") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-
-    // PUT /admin/users/:id/roles  (replace)
-    if (url.includes("/roles") && method === "PUT") {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    }
-
-    // Allow overrides for failure scenarios
-    if (overrides[url]) return overrides[url](options);
-
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+/** Resolve GET /admin/users with given user list */
+function mockUsersLoad(users = mockUsers) {
+  global.fetch.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ data: users }),
   });
 }
 
-beforeEach(() => {
-  mockFetch();
-  jest.spyOn(window, "alert").mockImplementation(() => {});
+/** Render and wait until the loading spinner disappears */
+async function renderUM(users = mockUsers) {
+  mockUsersLoad(users);
+  render(<UserManagement />);
+  await waitFor(() =>
+    expect(screen.queryByText(/Loading users/i)).not.toBeInTheDocument()
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. INITIAL LOAD
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Initial load", () => {
+  it("TC-01: shows loading spinner while fetch is pending", async () => {
+    let resolve;
+    global.fetch.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    render(<UserManagement />);
+    expect(screen.getByText(/Loading users/i)).toBeInTheDocument();
+    await resolve({ ok: true, json: async () => ({ data: [] }) });
+  });
+
+  it("TC-02: renders user table after users load", async () => {
+    await renderUM();
+    expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+    expect(screen.getByText("alice@bank.io")).toBeInTheDocument();
+  });
+
+  it("TC-03: calls GET /admin/users on mount", async () => {
+    await renderUM();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost/admin/users",
+      expect.objectContaining({ credentials: "include" })
+    );
+  });
+
+  it("TC-04: shows alert when user load returns non-ok response", async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    render(<UserManagement />);
+    await waitFor(() =>
+      expect(global.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/Failed to load users/i)
+      )
+    );
+  });
 });
 
-afterEach(() => {
-  jest.restoreAllMocks();
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. USER TABLE RENDERING
+// ─────────────────────────────────────────────────────────────────────────────
+describe("User table rendering", () => {
+  it("TC-05: renders table column headers — User, Status, Actions", async () => {
+    await renderUM();
+    expect(screen.getByText("User")).toBeInTheDocument();
+    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.getByText("Actions")).toBeInTheDocument();
+  });
+
+  it("TC-06: shows Active chip for enabled users", async () => {
+    await renderUM();
+    expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
+  });
+
+  it("TC-07: shows Inactive chip for disabled users", async () => {
+    await renderUM();
+    expect(screen.getByText("Inactive")).toBeInTheDocument();
+  });
+
+  it("TC-08: renders avatar initials from user name (Alice Smith → AL)", async () => {
+    await renderUM();
+    expect(screen.getByText("AL")).toBeInTheDocument();
+  });
+
+  it("TC-09: shows 'U' avatar when user has no name", async () => {
+    mockUsersLoad([{ id: "x1", firstName: "", email: "x@b.io", enabled: true }]);
+    render(<UserManagement />);
+    await waitFor(() => screen.getByText("U"));
+    expect(screen.getByText("U")).toBeInTheDocument();
+  });
+
+  it("TC-10: renders Roles (🛡️) and Delete (🗑️) buttons per row", async () => {
+    await renderUM();
+    expect(screen.getAllByTitle("Roles").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle("Delete").length).toBeGreaterThan(0);
+  });
 });
 
-// =============================================================================
-// 1. StatusChip
-// =============================================================================
-describe("StatusChip", () => {
-  // StatusChip is internal — we test it via rendered rows in UserManagement
-
-  it("renders Active chip with green class", async () => {
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    const chip = screen.getAllByText("Active")[0];
-    expect(chip).toHaveClass("chip-green");
-  });
-
-  it("renders Inactive chip with yellow class", async () => {
-    render(<UserManagement />);
-    await screen.findByText("Bob Reyes");
-    const chip = screen.getByText("Inactive");
-    expect(chip).toHaveClass("chip-yellow");
-  });
-});
-
-// =============================================================================
-// 2. RoleChip (tested via RoleManagerModal)
-// =============================================================================
-describe("RoleChip inside RoleManagerModal", () => {
-  async function openRoleModal() {
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    const roleButtons = screen.getAllByTitle("Roles");
-    fireEvent.click(roleButtons[0]);
-    await screen.findByText("🛡️ Manage Roles");
-    // Wait until chips are rendered (roles loaded from fetch)
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-  }
-
-  it("renders role chips for current roles", async () => {
-    await openRoleModal();
-    const chips = document.querySelectorAll(".role-chip");
-    const chipLabels = Array.from(chips).map((c) => c.textContent.replace("×", "").trim());
-    expect(chipLabels).toContain("Manager");
-    expect(chipLabels).toContain("User");
-  });
-
-  it("renders a remove button on each role chip", async () => {
-    await openRoleModal();
-    const removeButtons = screen.getAllByTitle(/Remove .* role/);
-    expect(removeButtons).toHaveLength(2);
-  });
-
-  it("remove button is disabled while busy", async () => {
-    // Only "user" role pre-assigned. POST never resolves → busy stays true when assigning "Manager"
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && options.method === "POST") {
-        return new Promise(() => {}); // never resolves → busy stays true
-      }
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ name: "user" }]) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. SEARCH & FILTER
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Search and filter", () => {
+  it("TC-11: filters users by name", async () => {
+    await renderUM();
+    fireEvent.change(screen.getByPlaceholderText(/Search users/i), {
+      target: { value: "alice" },
     });
+    expect(screen.getByText("alice@bank.io")).toBeInTheDocument();
+    expect(screen.queryByText("bob@bank.io")).not.toBeInTheDocument();
+  });
 
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await screen.findByText("🛡️ Manage Roles");
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    // Select "Manager" (not assigned) then click Assign — this triggers busy=true
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Manager" } });
-    fireEvent.click(screen.getByText("+ Assign"));
-
-    // busy=true → remove buttons must be disabled
-    await waitFor(() => {
-      const removeButtons = document.querySelectorAll(".chip-remove-btn");
-      expect(removeButtons.length).toBeGreaterThan(0);
-      removeButtons.forEach((btn) => expect(btn).toBeDisabled());
+  it("TC-12: filters users by email", async () => {
+    await renderUM();
+    fireEvent.change(screen.getByPlaceholderText(/Search users/i), {
+      target: { value: "carol@bank.io" },
     });
+    expect(screen.getByText("carol@bank.io")).toBeInTheDocument();
+    expect(screen.queryByText("alice@bank.io")).not.toBeInTheDocument();
+  });
+
+  it("TC-13: filters users by status text", async () => {
+    await renderUM();
+    fireEvent.change(screen.getByPlaceholderText(/Search users/i), {
+      target: { value: "inactive" },
+    });
+    expect(screen.getByText("carol@bank.io")).toBeInTheDocument();
+    expect(screen.queryByText("alice@bank.io")).not.toBeInTheDocument();
+  });
+
+  it("TC-14: shows 'No users found' when no results match", async () => {
+    await renderUM();
+    fireEvent.change(screen.getByPlaceholderText(/Search users/i), {
+      target: { value: "xyznotexist" },
+    });
+    expect(
+      screen.getByText(/No users found matching your search/i)
+    ).toBeInTheDocument();
+  });
+
+  it("TC-15: resets to page 1 when search query changes", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("Next"));
+    fireEvent.change(screen.getByPlaceholderText(/Search users/i), {
+      target: { value: "alice" },
+    });
+    expect(screen.getByText(/Page/)).toHaveTextContent("1");
   });
 });
 
-// =============================================================================
-// 3. RoleManagerModal
-// =============================================================================
-describe("RoleManagerModal", () => {
-  async function openModal(userIndex = 0) {
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    const roleButtons = screen.getAllByTitle("Roles");
-    fireEvent.click(roleButtons[userIndex]);
-    await screen.findByText("🛡️ Manage Roles");
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. PAGINATION
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Pagination", () => {
+  it("TC-16: shows only first 5 users on page 1 (PAGE_SIZE = 5)", async () => {
+    await renderUM();
+    expect(screen.getByText("alice@bank.io")).toBeInTheDocument();
+    expect(screen.queryByText("frank@bank.io")).not.toBeInTheDocument();
+  });
 
-  it("displays user name and email in summary", async () => {
-    await openModal();
-    const modal = document.querySelector(".modal-overlay");
-    expect(within(modal).getByText("Alice Chen")).toBeInTheDocument();
+  it("TC-17: Next button navigates to page 2", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("Next"));
+    expect(screen.getByText("frank@bank.io")).toBeInTheDocument();
+  });
+
+  it("TC-18: Prev button navigates back to page 1", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("Next"));
+    fireEvent.click(screen.getByText("Prev"));
+    expect(screen.getByText("alice@bank.io")).toBeInTheDocument();
+  });
+
+  it("TC-19: Prev button is disabled on first page", async () => {
+    await renderUM();
+    expect(screen.getByText("Prev")).toBeDisabled();
+  });
+
+  it("TC-20: Next button is disabled on last page", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("Next"));
+    expect(screen.getByText("Next")).toBeDisabled();
+  });
+
+  it("TC-21: shows correct page indicator text", async () => {
+    await renderUM();
+    expect(screen.getByText(/Page/)).toHaveTextContent("Page 1 of 2");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. ADD USER MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Add User modal", () => {
+  it("TC-22: opens Add New User modal on '+ Add User' click", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    expect(screen.getByText("Add New User")).toBeInTheDocument();
+  });
+
+  it("TC-23: closes modal on Cancel click", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(screen.queryByText("Add New User")).not.toBeInTheDocument();
+  });
+
+  it("TC-24: closes modal on overlay click", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.click(document.querySelector(".modal-overlay"));
+    await waitFor(() =>
+      expect(screen.queryByText("Add New User")).not.toBeInTheDocument()
+    );
+  });
+
+  it("TC-25: shows 'Email is required' error when email is empty", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.click(screen.getByText("Create User"));
+    expect(screen.getByText("Email is required.")).toBeInTheDocument();
+  });
+
+  it("TC-26: shows 'Invalid email address' error for bad format", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "not-an-email" },
+    });
+    fireEvent.click(screen.getByText("Create User"));
+    expect(screen.getByText("Invalid email address.")).toBeInTheDocument();
+  });
+
+  it("TC-27: submits valid user and closes modal on success", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "newuser@bank.io" },
+    });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ status: "created" }]) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: mockUsers }) });
+    fireEvent.click(screen.getByText("Create User"));
+    await waitFor(() =>
+      expect(screen.queryByText("Add New User")).not.toBeInTheDocument()
+    );
+  });
+
+  it("TC-28: calls POST /admin/bulk-users with correct payload", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "test@bank.io" },
+    });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ status: "created" }]) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: mockUsers }) });
+    fireEvent.click(screen.getByText("Create User"));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost/admin/bulk-users",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("test@bank.io"),
+        })
+      )
+    );
+  });
+
+  it("TC-29: shows error when API returns a failed entry", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "bad@bank.io" },
+    });
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{ status: "failed", error: "User already exists" }]),
+    });
+    fireEvent.click(screen.getByText("Create User"));
+    await screen.findByText(/User already exists/i);
+  });
+
+  it("TC-30: shows form error when API returns non-ok response", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    fireEvent.change(screen.getByPlaceholderText("Email Address"), {
+      target: { value: "err@bank.io" },
+    });
+    global.fetch.mockResolvedValueOnce({
+      ok: false, status: 500, text: async () => "Server Error",
+    });
+    fireEvent.click(screen.getByText("Create User"));
+    await screen.findByText(/Add user failed/i);
+  });
+
+  it("TC-31: role dropdown defaults to 'User'", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    const modal = document.querySelector(".modal-card");
+    expect(within(modal).getByRole("combobox").value).toBe("User");
+  });
+
+  it("TC-32: role dropdown contains Manager and User options", async () => {
+    await renderUM();
+    fireEvent.click(screen.getByText("+ Add User"));
+    const modal = document.querySelector(".modal-card");
+    const opts = Array.from(within(modal).getByRole("combobox").options).map(o => o.text);
+    expect(opts).toContain("Manager");
+    expect(opts).toContain("User");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. DELETE USER MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Delete User modal", () => {
+  it("TC-33: opens delete confirmation modal on 🗑️ click", async () => {
+    await renderUM();
+    fireEvent.click(screen.getAllByTitle("Delete")[0]);
+    expect(
+      screen.getByText(/Are you sure you want to permanently delete/i)
+    ).toBeInTheDocument();
+  });
+
+  it("TC-34: shows the user's email in the confirmation message", async () => {
+    await renderUM();
+    fireEvent.click(screen.getAllByTitle("Delete")[0]);
+    const modal = document.querySelector(".modal-card");
     expect(within(modal).getByText("alice@bank.io")).toBeInTheDocument();
   });
 
-  it("fetches and displays current roles on open", async () => {
-    await openModal();
-    await waitFor(() => {
-      const chips = document.querySelectorAll(".role-chip");
-      const chipLabels = Array.from(chips).map((c) => c.textContent.replace("×", "").trim());
-      expect(chipLabels).toContain("Manager");
-      expect(chipLabels).toContain("User");
-    });
+  it("TC-35: closes modal on Cancel click", async () => {
+    await renderUM();
+    fireEvent.click(screen.getAllByTitle("Delete")[0]);
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(screen.queryByText(/permanently delete/i)).not.toBeInTheDocument();
   });
 
-  it("shows empty state when user has no roles", async () => {
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
+  it("TC-36: calls DELETE /admin/users/:id and closes modal on confirm", async () => {
+    await renderUM();
+    fireEvent.click(screen.getAllByTitle("Delete")[0]);
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: mockUsers.slice(1) }) });
+    // Scope to modal footer — "Delete User" also appears in the modal <h3> header
+    const footer36 = document.querySelector(".modal-card .um-modal-footer");
+    fireEvent.click(within(footer36).getByText("Delete User"));
+    await waitFor(() =>
+      expect(screen.queryByText(/permanently delete/i)).not.toBeInTheDocument()
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost/admin/users/u1",
+      expect.objectContaining({ method: "DELETE" })
+    );
+  });
 
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
+  it("TC-37: shows alert when delete API call fails", async () => {
+    await renderUM();
+    fireEvent.click(screen.getAllByTitle("Delete")[0]);
+    global.fetch.mockResolvedValueOnce({
+      ok: false, status: 500, text: async () => "Server Error",
+    });
+    // Scope to modal footer — "Delete User" also appears in the modal <h3> header
+    const footer37 = document.querySelector(".modal-card .um-modal-footer");
+    fireEvent.click(within(footer37).getByText("Delete User"));
+    await waitFor(() =>
+      expect(global.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/Delete failed/i)
+      )
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. ROLE MANAGER MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Role Manager modal", () => {
+  /**
+   * Open the roles modal for the first user (Alice).
+   * Returns a helper to query ONLY the chips section (.um-section first child)
+   * to avoid "multiple elements" errors — "Manager" appears in both the
+   * role chip AND the dropdown <option>.
+   */
+  async function openRolesModal(roles = [{ name: "manager" }]) {
+    await renderUM();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: roles }),
+    });
     fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await screen.findByText("No roles assigned. Add one below.");
+    await screen.findByText("🛡️ Manage Roles");
+  }
+
+  /** Returns the chips container (first .um-section inside the modal) */
+  function chipsSection() {
+    return document.querySelectorAll(".modal-card .um-section")[0];
+  }
+
+  it("TC-38: opens Role Manager modal on 🛡️ click", async () => {
+    await openRolesModal();
+    expect(screen.getByText("🛡️ Manage Roles")).toBeInTheDocument();
   });
 
-  it("shows error if roles fetch fails", async () => {
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: false, status: 500 });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
-
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await screen.findByText(/Could not load current roles/);
+  it("TC-39: shows user name and email in the modal summary", async () => {
+    await openRolesModal();
+    const modal = document.querySelector(".modal-card");
+    expect(within(modal).getByText("Alice Smith")).toBeInTheDocument();
+    expect(within(modal).getByText("alice@bank.io")).toBeInTheDocument();
   });
 
-  it("assigns a role and refreshes the list", async () => {
-    // Start with only "user" role so we can assign "Manager" fresh
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ name: "user" }]) });
-      }
-      if (url.includes("/roles") && options.method === "POST") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
-
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    // Select "Manager" (not currently assigned) and assign
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "Manager" } });
-    fireEvent.click(screen.getByText("+ Assign"));
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/roles"),
-        expect.objectContaining({ method: "POST" })
-      );
-    });
+  it("TC-40: displays currently assigned roles as chips", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    // Wait for chips to render, then scope to chips section to avoid
+    // matching the dropdown <option>Manager</option> as well
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    expect(within(chipsSection()).getAllByText("Manager").length).toBeGreaterThan(0);
   });
 
-  it("shows flash error when assigning an already-assigned role", async () => {
-    // Only manager role assigned
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ name: "manager" }]) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
-
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    // Dropdown defaults to "Manager" which is already assigned — just click Assign
-    fireEvent.click(screen.getByText("+ Assign"));
-    await screen.findByText(/already listed/);
+  it("TC-41: shows 'No roles assigned' when user has no roles", async () => {
+    await openRolesModal([]);
+    await screen.findByText(/No roles assigned/i);
   });
 
-  it("removes a role successfully", async () => {
-    await openModal();
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    const removeBtn = screen.getByTitle("Remove Manager role");
-    fireEvent.click(removeBtn);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/roles"),
-        expect.objectContaining({ method: "DELETE" })
-      );
-    });
-    await screen.findByText(/removed/);
-  });
-
-  it("shows error if remove fails", async () => {
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && options.method === "DELETE") {
-        return Promise.resolve({ ok: false, status: 403, text: () => Promise.resolve("Forbidden") });
-      }
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_ROLES) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
-
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    fireEvent.click(screen.getByTitle("Remove Manager role"));
-    await screen.findByText(/Remove failed/);
-  });
-
-  it("replaces a role successfully", async () => {
-    await openModal();
-    await waitFor(() => expect(document.querySelectorAll(".role-chip").length).toBeGreaterThan(0));
-
-    const select = screen.getByRole("combobox");
-    fireEvent.change(select, { target: { value: "User" } });
-
-    const replaceBtn = screen.getByRole("button", { name: /Manager → User/ });
-    fireEvent.click(replaceBtn);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/roles"),
-        expect.objectContaining({ method: "PUT" })
-      );
-    });
-    await screen.findByText(/Replaced/);
-  });
-
-  it("shows error when replacing with same role", async () => {
-    // Only manager role so we can try to replace manager → manager
-    global.fetch = jest.fn((url, options = {}) => {
-      if (url.includes("/roles") && !options.method) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([{ name: "manager" }]) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-    });
-
-    render(<UserManagement />);
-    await screen.findByText("Alice Chen");
-    fireEvent.click(screen.getAllByTitle("Roles")[0]);
-
-    // Wait for the role chip to render before looking for the replace button
-    await waitFor(() => {
-      const chips = document.querySelectorAll(".role-chip");
-      expect(chips.length).toBeGreaterThan(0);
-    });
-
-    // Dropdown defaults to "Manager", replace button should read "Manager → Manager"
-    const replaceBtn = await screen.findByRole("button", { name: /Manager → Manager/ });
-    fireEvent.click(replaceBtn);
-    await screen.findByText("Pick a different role.");
-  });
-
-  it("closes when Done is clicked", async () => {
-    await openModal();
+  it("TC-42: closes modal on Done button click", async () => {
+    await openRolesModal();
     fireEvent.click(screen.getByText("Done"));
     expect(screen.queryByText("🛡️ Manage Roles")).not.toBeInTheDocument();
   });
 
-  it("closes when clicking outside the modal", async () => {
-    await openModal();
-    const overlay = document.querySelector(".modal-overlay");
-    fireEvent.click(overlay);
+  it("TC-43: closes modal on × button click", async () => {
+    await openRolesModal();
+    const modal = document.querySelector(".modal-card");
+    fireEvent.click(within(modal).getByText("×"));
     expect(screen.queryByText("🛡️ Manage Roles")).not.toBeInTheDocument();
+  });
+
+  it("TC-44: calls POST /roles to assign a new role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    const modal = document.querySelector(".modal-card");
+    fireEvent.change(within(modal).getByRole("combobox"), {
+      target: { value: "User" },
+    });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ name: "manager" }, { name: "user" }] }) });
+    fireEvent.click(screen.getByText("+ Assign"));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/roles?role_name=user"),
+        expect.objectContaining({ method: "POST" })
+      )
+    );
+  });
+
+  it("TC-45: shows error when assigning an already-assigned role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    // Dropdown defaults to Manager — try assigning it again
+    fireEvent.click(screen.getByText("+ Assign"));
+    await screen.findByText(/already listed/i);
+  });
+
+  it("TC-46: calls DELETE /roles to remove an existing role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+    fireEvent.click(screen.getByTitle("Remove Manager role"));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/roles?role_name=manager"),
+        expect.objectContaining({ method: "DELETE" })
+      )
+    );
+  });
+
+  it("TC-47: calls PUT /roles to replace an existing role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    const modal = document.querySelector(".modal-card");
+    fireEvent.change(within(modal).getByRole("combobox"), {
+      target: { value: "User" },
+    });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ name: "user" }] }) });
+    fireEvent.click(screen.getByText("Manager → User"));
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("old_role=manager&new_role=user"),
+        expect.objectContaining({ method: "PUT" })
+      )
+    );
+  });
+
+  it("TC-48: shows error when replacing with the same role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    // Dropdown is already on Manager — click replace with same role
+    fireEvent.click(screen.getByText("Manager → Manager"));
+    await screen.findByText(/Pick a different role/i);
+  });
+
+  it("TC-49: shows error when roles fetch returns non-ok response", async () => {
+    await renderUM();
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    fireEvent.click(screen.getAllByTitle("Roles")[0]);
+    await screen.findByText(/Could not load current roles/i);
+  });
+
+  it("TC-50: shows success flash message after assigning a role", async () => {
+    await openRolesModal([{ name: "manager" }]);
+    await waitFor(() =>
+      expect(within(chipsSection()).queryAllByText("Manager").length).toBeGreaterThan(0)
+    );
+    const modal = document.querySelector(".modal-card");
+    fireEvent.change(within(modal).getByRole("combobox"), {
+      target: { value: "User" },
+    });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ name: "user" }] }) });
+    fireEvent.click(screen.getByText("+ Assign"));
+    await screen.findByText(/User assigned/i);
   });
 });
 
-// =============================================================================
-// 4. UserManagement — main component
-// =============================================================================
-describe("UserManagement — main", () => {
-  it("shows loading state initially", () => {
-    // Never resolves
-    global.fetch = jest.fn(() => new Promise(() => {}));
-    render(<UserManagement />);
-    expect(screen.getByText("Loading users…")).toBeInTheDocument();
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. CSV IMPORT
+// ─────────────────────────────────────────────────────────────────────────────
+describe("CSV Import", () => {
+  it("TC-51: renders the Import CSV button", async () => {
+    await renderUM();
+    expect(screen.getByText(/Import CSV/i)).toBeInTheDocument();
   });
 
-  it("renders user list after fetch", async () => {
-    render(<UserManagement />);
-    expect(await screen.findByText("Alice Chen")).toBeInTheDocument();
-    expect(screen.getByText("Bob Reyes")).toBeInTheDocument();
-    expect(screen.getByText("david")).toBeInTheDocument();
+  it("TC-52: shows alert when CSV has no valid rows", async () => {
+    await renderUM();
+    const file = new File(["name,email,role\n"], "empty.csv", { type: "text/csv" });
+    const input = document.querySelector("input[type='file']");
+    Object.defineProperty(input, "files", { value: [file] });
+    fireEvent.change(input);
+    await waitFor(() =>
+      expect(global.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/No valid users found/i)
+      )
+    );
   });
 
-  it("uses username fallback when firstName is missing", async () => {
-    render(<UserManagement />);
-    await screen.findByText("david"); // user3 has no firstName
+  it("TC-53: calls POST /admin/bulk-users with CSV data and shows success alert", async () => {
+    await renderUM();
+    const csv = "name,email,role\nTest User,testcsv@bank.io,user\n";
+    const file = new File([csv], "users.csv", { type: "text/csv" });
+    const input = document.querySelector("input[type='file']");
+    Object.defineProperty(input, "files", { value: [file] });
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ status: "created" }]) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: mockUsers }) });
+    fireEvent.change(input);
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost/admin/bulk-users",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
+    await waitFor(() =>
+      expect(global.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/Import complete/i)
+      )
+    );
   });
 
-  it("shows alert when user fetch fails", async () => {
-    global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 500 }));
-    render(<UserManagement />);
-    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Failed to load users")));
-  });
-
-  // ── Search ──────────────────────────────────────────────────────────────────
-  describe("Search", () => {
-    it("filters users by name", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-
-      const searchInput = screen.getByPlaceholderText("Search users…");
-      fireEvent.change(searchInput, { target: { value: "bob" } });
-
-      expect(screen.queryByText("Alice Chen")).not.toBeInTheDocument();
-      expect(screen.getByText("Bob Reyes")).toBeInTheDocument();
+  it("TC-54: shows alert when CSV import API fails", async () => {
+    await renderUM();
+    const csv = "name,email,role\nTest,fail@bank.io,user\n";
+    const file = new File([csv], "users.csv", { type: "text/csv" });
+    const input = document.querySelector("input[type='file']");
+    Object.defineProperty(input, "files", { value: [file] });
+    global.fetch.mockResolvedValueOnce({
+      ok: false, status: 500, text: async () => "Server Error",
     });
-
-    it("filters users by email", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-
-      fireEvent.change(screen.getByPlaceholderText("Search users…"), { target: { value: "david@bank.io" } });
-      expect(screen.getByText("david")).toBeInTheDocument();
-      expect(screen.queryByText("Alice Chen")).not.toBeInTheDocument();
-    });
-
-    it("shows empty state when no results match", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-
-      fireEvent.change(screen.getByPlaceholderText("Search users…"), { target: { value: "zzznomatch" } });
-      expect(screen.getByText("No users found matching your search.")).toBeInTheDocument();
-    });
-
-    it("resets to page 1 when search changes", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-
-      fireEvent.change(screen.getByPlaceholderText("Search users…"), { target: { value: "alice" } });
-      expect(screen.getByText(/Page/)).toHaveTextContent("Page 1");
-    });
-  });
-
-  // ── Pagination ───────────────────────────────────────────────────────────────
-  describe("Pagination", () => {
-    it("shows Prev disabled on first page", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      expect(screen.getByText("Prev")).toBeDisabled();
-    });
-
-    it("shows Next disabled when only one page", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      expect(screen.getByText("Next")).toBeDisabled();
-    });
-  });
-
-  // ── Add User Modal ───────────────────────────────────────────────────────────
-  describe("Add User Modal", () => {
-    it("opens when + Add User is clicked", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-      expect(screen.getByText("Add New User")).toBeInTheDocument();
-    });
-
-    it("shows validation error when email is empty", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-      fireEvent.click(screen.getByText("Create User"));
-      expect(screen.getByText("Email is required.")).toBeInTheDocument();
-    });
-
-    it("shows validation error for invalid email", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-
-      fireEvent.change(screen.getByPlaceholderText("Email Address"), { target: { value: "not-an-email" } });
-      fireEvent.click(screen.getByText("Create User"));
-      expect(screen.getByText("Invalid email address.")).toBeInTheDocument();
-    });
-
-    it("creates user and closes modal on success", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-
-      fireEvent.change(screen.getByPlaceholderText("Email Address"), { target: { value: "new@bank.io" } });
-      fireEvent.click(screen.getByText("Create User"));
-
-      await waitFor(() => {
-        expect(screen.queryByText("Add New User")).not.toBeInTheDocument();
-      });
-    });
-
-    it("shows error when API returns failed status", async () => {
-      global.fetch = jest.fn((url) => {
-        if (url.includes("/bulk-users")) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve([{ status: "failed", error: "Email already exists" }]),
-          });
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-      });
-
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-
-      fireEvent.change(screen.getByPlaceholderText("Email Address"), { target: { value: "alice@bank.io" } });
-      fireEvent.click(screen.getByText("Create User"));
-
-      await screen.findByText(/Email already exists/);
-    });
-
-    it("closes when Cancel is clicked", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getByText("+ Add User"));
-      fireEvent.click(screen.getByText("Cancel"));
-      expect(screen.queryByText("Add New User")).not.toBeInTheDocument();
-    });
-  });
-
-  // ── Delete User Modal ────────────────────────────────────────────────────────
-  describe("Delete User Modal", () => {
-    it("opens with correct user email", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getAllByTitle("Delete")[0]);
-
-      const modal = document.querySelector(".modal-overlay");
-      expect(within(modal).getByText("alice@bank.io")).toBeInTheDocument();
-      expect(within(modal).getByRole("heading", { name: "Delete User" })).toBeInTheDocument();
-    });
-
-    it("deletes user and closes modal", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getAllByTitle("Delete")[0]);
-      fireEvent.click(screen.getByRole("button", { name: "Delete User" }));
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining("/admin/users/u1"),
-          expect.objectContaining({ method: "DELETE" })
-        );
-      });
-      await waitFor(() => {
-        expect(screen.queryByRole("heading", { name: "Delete User" })).not.toBeInTheDocument();
-      });
-    });
-
-    it("shows alert when delete fails", async () => {
-      global.fetch = jest.fn((url, options = {}) => {
-        if (options.method === "DELETE" && !url.includes("/roles")) {
-          return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve("Server Error") });
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_USERS) });
-      });
-
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getAllByTitle("Delete")[0]);
-      fireEvent.click(screen.getByRole("button", { name: "Delete User" }));
-
-      await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Delete failed")));
-    });
-
-    it("closes when Cancel is clicked", async () => {
-      render(<UserManagement />);
-      await screen.findByText("Alice Chen");
-      fireEvent.click(screen.getAllByTitle("Delete")[0]);
-      fireEvent.click(screen.getByText("Cancel"));
-      expect(screen.queryByRole("heading", { name: "Delete User" })).not.toBeInTheDocument();
-    });
+    fireEvent.change(input);
+    await waitFor(() =>
+      expect(global.alert).toHaveBeenCalledWith(
+        expect.stringMatching(/Import failed/i)
+      )
+    );
   });
 });
