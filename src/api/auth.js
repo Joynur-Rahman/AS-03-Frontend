@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost";
 
 export function login() {
   window.location.href = `${API_BASE}/login`;

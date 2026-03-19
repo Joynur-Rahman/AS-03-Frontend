@@ -3,7 +3,7 @@ import "./landingPage.css";
 import { UserCircle, Shield, Lock, Users, ArrowRight, Moon, Sun } from "lucide-react";
 import hdfcLogo from '../assets/hdfcbanklogo.png';
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost";
 
 function LandingPage() {
   const [darkMode, setDarkMode] = useState(false);

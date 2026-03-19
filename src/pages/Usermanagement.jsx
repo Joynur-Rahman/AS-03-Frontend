@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-const API_BASE = "http://localhost";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost";
 
 const ROLE_MAP = {
   Manager: "manager",
